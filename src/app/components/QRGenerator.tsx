@@ -271,13 +271,13 @@ export default function QRGenerator() {
             className="text-4xl md:text-5xl font-bold mb-4 text-slate-900" 
             style={{ fontFamily: 'Satoshi-Bold' }}
           >
-            Lag din QR-kode
+            Lag dum QR-kode
           </h2>
           <p 
             className="text-lg text-slate-600 max-w-2xl mx-auto" 
             style={{ fontFamily: 'Satoshi-Regular' }}
           >
-            Velg type, tilpass utseendet og generer din unike QR-kode på sekunder
+            Velg type, tilpass utseendet og generer din QR-kode på sekunder.<br></br>(Uten premium funksjoner og analyse).
           </p>
         </div>
 

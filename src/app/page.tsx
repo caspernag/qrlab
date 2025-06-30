@@ -29,13 +29,13 @@ export default function Home() {
               className="text-6xl md:text-8xl font-bold mb-6 text-slate-900 leading-tight tracking-tight" 
               style={{ fontFamily: 'Satoshi-Black' }}
             >
-              Lag en QR-kode eller lenke for alt
+              Intelligent Markedsføring
             </h1>
             <p 
               className="text-xl md:text-2xl text-slate-600 mb-12 max-w-2xl mx-auto leading-relaxed" 
               style={{ fontFamily: 'Satoshi-Regular' }}
             >
-              Den enkleste måten å dele alt på. Lag QR-koder for nettsider, filer, kontaktinfo, wifi og mer.
+              Se hvor, når og hvem som engasjerer med din markedsføring. Detaljerte analyser som gjør fysisk markedsføring målbart
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <button 
