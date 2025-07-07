@@ -1,7 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase, QRCode } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
 
 export function useQRCodes() {
   const [qrCodes, setQRCodes] = useState<QRCode[]>([]);
@@ -9,38 +8,7 @@ export function useQRCodes() {
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const { user } = useAuth();
   
-    const fetchQRCodes = useCallback(async () => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-    
-    try {
-      console.log('Fetching QR codes for user:', user.id);
-      
-      const { data, error } = await supabase
-        .from('qr_codes')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Supabase fetch error:', error);
-        console.error('Error details:', JSON.stringify(error, null, 2));
-        throw error;
-      }
-      
-      console.log('Fetched QR codes:', data);
-      setQRCodes(data || []);
-    } catch (error: any) {
-      console.error('Error fetching QR codes:', error);
-      console.error('Error message:', error?.message);
-      console.error('Error code:', error?.code);
-      console.error('Full error object:', JSON.stringify(error, null, 2));
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
+  
 
   const ensureUserProfile = async () => {
     if (!user) return false;
@@ -77,7 +45,7 @@ export function useQRCodes() {
       }
       
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error ensuring user profile:', error);
       return false;
     }
@@ -143,16 +111,18 @@ export function useQRCodes() {
       // Update local state immediately
       setQRCodes(current => [data, ...current]);
       return data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error in createQRCode function:', error);
       console.error('Error type:', typeof error);
-      console.error('Error constructor:', error.constructor.name);
-      console.error('Error message:', error?.message);
-      console.error('Error stack:', error?.stack);
+      
+      const err = error as { message?: string; error_description?: string; constructor?: { name?: string }; stack?: string };
+      console.error('Error constructor:', err?.constructor?.name);
+      console.error('Error message:', err?.message);
+      console.error('Error stack:', err?.stack);
       console.error('Full error serialized:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
       
       // Re-throw with more specific error message
-      const errorMessage = error?.message || error?.error_description || 'Unknown database error';
+      const errorMessage = err?.message || err?.error_description || 'Unknown database error';
       throw new Error(`Failed to create QR code: ${errorMessage}`);
     }
   };
@@ -183,9 +153,10 @@ export function useQRCodes() {
         current.map(qr => qr.id === id ? data : qr)
       );
       return data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating QR code:', error);
-      throw new Error(`Failed to update QR code: ${error?.message || 'Unknown error'}`);
+      const err = error as { message?: string };
+      throw new Error(`Failed to update QR code: ${err?.message || 'Unknown error'}`);
     }
   };
 
@@ -205,9 +176,10 @@ export function useQRCodes() {
       
       // Update local state immediately
       setQRCodes(current => current.filter(qr => qr.id !== id));
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting QR code:', error);
-      throw new Error(`Failed to delete QR code: ${error?.message || 'Unknown error'}`);
+      const err = error as { message?: string };
+      throw new Error(`Failed to delete QR code: ${err?.message || 'Unknown error'}`);
     }
   };
 
@@ -251,7 +223,7 @@ export function useQRCodes() {
       
       console.log('Refetched QR codes:', data);
       setQRCodes(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error refetching QR codes:', error);
     } finally {
       setLoading(false);

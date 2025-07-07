@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useQRCodes } from '@/hooks/useQRCodes';
 import { useQRScans } from '@/hooks/useQRScans';
 import { 
@@ -12,13 +12,11 @@ import {
   Download,
   Search,
   QrCode,
-  MapPin,
   Smartphone,
   Monitor,
   Tablet,
   Globe,
   Clock,
-  Filter,
   Activity,
   Users,
   Target,
@@ -36,7 +34,6 @@ import {
   SelectValue,
   SelectSeparator
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { QRCode } from '@/lib/supabase';
 // Note: Install recharts for production charts: npm install recharts
@@ -159,7 +156,7 @@ export function AnalyticsSection() {
   }, [qrScans]);
 
   // Generate real time-based data from QR creation and scan patterns
-  const generateTimeSeriesData = (qr?: QRCode) => {
+  const generateTimeSeriesData = useCallback((qr?: QRCode) => {
     // Convert timeRange to days
     const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : timeRange === '1y' ? 365 : 30;
     const data = [];
@@ -252,10 +249,10 @@ export function AnalyticsSection() {
     }
     
     return data;
-  };
+  }, [timeRange, qrCodes]);
 
-  const timeSeriesData = useMemo(() => generateTimeSeriesData(), [qrCodes, timeRange]);
-  const selectedTimeSeriesData = useMemo(() => selectedQR ? generateTimeSeriesData(selectedQR) : [], [selectedQR, timeRange]);
+  const timeSeriesData = useMemo(() => generateTimeSeriesData(), [generateTimeSeriesData]);
+  const selectedTimeSeriesData = useMemo(() => selectedQR ? generateTimeSeriesData(selectedQR) : [], [selectedQR, generateTimeSeriesData]);
 
   // Calculate real location data from actual QR scan data
   const locationData = useMemo(() => {
@@ -339,7 +336,7 @@ export function AnalyticsSection() {
     }
 
     // Use actual scan data from Supabase (max 5 most recent)
-    return qrScans.slice(0, 3).map((scan: any) => {
+    return qrScans.slice(0, 3).map((scan: { qr_code_id: string; scanned_at: string; country?: string; city?: string; user_agent?: string }) => {
       const qrCode = qrCodes.find(qr => qr.id === scan.qr_code_id);
       const scannedAt = new Date(scan.scanned_at);
       const now = new Date();
@@ -375,7 +372,7 @@ export function AnalyticsSection() {
         'unknown': '🌍'
       };
 
-      const flag = countryFlags[scan.country] || '🌍';
+      const flag = countryFlags[scan.country || 'unknown'] || '🌍';
       const location = scan.city && scan.city !== 'unknown' 
         ? `${flag} ${scan.city}` 
         : `${flag} ${scan.country || 'Ukjent'}`;
@@ -392,88 +389,184 @@ export function AnalyticsSection() {
   }, [qrScans, qrCodes]);
 
   // Custom Chart Component (replace with recharts in production)
-  const SimpleLineChart = ({ data, color = '#3b82f6', height = 200 }: { data: any[], color?: string, height?: number }) => {
-    if (!data.length) return <div className="h-48 flex items-center justify-center text-muted-foreground">Ingen data</div>;
+  const SimpleLineChart = ({ data, color = '#3b82f6', height = 200 }: { data: { date: string; scans: number }[], color?: string, height?: number }) => {
+    const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number; date: string; value: number } | null>(null);
+    
+    if (!data.length) return (
+      <div className="h-48 flex items-center justify-center text-muted-foreground">
+        <div className="text-center">
+          <Activity className="w-8 h-8 mx-auto mb-2 opacity-50" />
+          <p className="text-sm">Ingen data tilgjengelig</p>
+        </div>
+      </div>
+    );
     
     const maxValue = Math.max(...data.map(d => d.scans));
-    const points = data.map((d, i) => {
-      const x = (i / (data.length - 1)) * 100;
-      const y = 100 - (d.scans / maxValue) * 80; // Leave 20% padding
-      return `${x},${y}`;
-    }).join(' ');
+    const minValue = Math.min(...data.map(d => d.scans));
+    const range = maxValue - minValue;
+    const effectiveMax = range === 0 ? maxValue + 1 : maxValue;
+    const padding = { top: 10, right: 5, bottom: 20, left: 25 };
+    const chartWidth = 100 - padding.left - padding.right;
+    const chartHeight = 100 - padding.top - padding.bottom;
+    
+    // Create smooth curve path using cubic bezier curves
+    const createSmoothPath = (points: Array<{x: number, y: number}>) => {
+      if (points.length < 2) return '';
+      
+      let path = `M ${points[0].x} ${points[0].y}`;
+      
+      for (let i = 1; i < points.length; i++) {
+        const prevPoint = points[i - 1];
+        const currentPoint = points[i];
+        const nextPoint = points[i + 1];
+        
+        // Calculate control points for smooth curve
+        const controlPoint1X = prevPoint.x + (currentPoint.x - prevPoint.x) * 0.3;
+        const controlPoint1Y = prevPoint.y;
+        const controlPoint2X = currentPoint.x - (nextPoint ? (nextPoint.x - currentPoint.x) * 0.3 : 0);
+        const controlPoint2Y = currentPoint.y;
+        
+        path += ` C ${controlPoint1X} ${controlPoint1Y}, ${controlPoint2X} ${controlPoint2Y}, ${currentPoint.x} ${currentPoint.y}`;
+      }
+      
+      return path;
+    };
+    
+    const chartPoints = data.map((d, i) => ({
+      x: padding.left + (i / (data.length - 1)) * chartWidth,
+      y: padding.top + (1 - (d.scans - minValue) / (effectiveMax - minValue)) * chartHeight,
+      value: d.scans,
+      date: d.date
+    }));
 
+    const smoothPath = createSmoothPath(chartPoints);
+    
     return (
-      <div className="relative" style={{ height: `${height}px` }}>
+      <div className="relative w-full" style={{ height: `${height}px` }}>
         <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-          {/* Grid lines */}
-          {[...Array(5)].map((_, i) => (
+          {/* Subtle grid lines */}
+          {[...Array(4)].map((_, i) => (
             <line
               key={i}
-              x1="0"
-              y1={20 + i * 15}
-              x2="100"
-              y2={20 + i * 15}
-              stroke="#f1f5f9"
+              x1={padding.left}
+              y1={padding.top + (i / 3) * chartHeight}
+              x2={padding.left + chartWidth}
+              y2={padding.top + (i / 3) * chartHeight}
+              stroke="#f8fafc"
               strokeWidth="0.2"
+              strokeDasharray="0.5,1"
             />
           ))}
           
-          {/* Area under the curve */}
-          <polygon
-            points={`0,100 ${points} 100,100`}
+          {/* Area gradient fill */}
+          <defs>
+            <linearGradient id={`gradient-${color.replace('#', '')}`} x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor={color} stopOpacity="0.15" />
+              <stop offset="50%" stopColor={color} stopOpacity="0.05" />
+              <stop offset="100%" stopColor={color} stopOpacity="0.0" />
+            </linearGradient>
+            <linearGradient id={`line-gradient-${color.replace('#', '')}`} x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor={color} stopOpacity="0.8" />
+              <stop offset="50%" stopColor={color} stopOpacity="1" />
+              <stop offset="100%" stopColor={color} stopOpacity="0.8" />
+            </linearGradient>
+          </defs>
+          
+          {/* Area under curve */}
+          <path
+            d={`${smoothPath} L ${padding.left + chartWidth} ${padding.top + chartHeight} L ${padding.left} ${padding.top + chartHeight} Z`}
             fill={`url(#gradient-${color.replace('#', '')})`}
-            opacity="0.3"
           />
           
-          {/* Main line */}
-          <polyline
-            points={points}
+          {/* Main smooth line */}
+          <path
+            d={smoothPath}
             fill="none"
-            stroke={color}
-            strokeWidth="0.5"
+            stroke={`url(#line-gradient-${color.replace('#', '')})`}
+            strokeWidth="0.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
           />
           
-          {/* Data points */}
-          {data.map((d, i) => {
-            const x = (i / (data.length - 1)) * 100;
-            const y = 100 - (d.scans / maxValue) * 80;
-            return (
+          {/* Data points with hover functionality */}
+          {chartPoints.map((point, i) => (
+            <g key={i}>
+              {/* Invisible hover area */}
               <circle
-                key={i}
-                cx={x}
-                cy={y}
-                r="0.5"
-                fill={color}
-                className="hover:r-1 transition-all duration-200"
+                cx={point.x}
+                cy={point.y}
+                r="3"
+                fill="transparent"
+                className="cursor-pointer"
+                onMouseEnter={() => setHoveredPoint({ x: point.x, y: point.y, date: point.date, value: point.value })}
+                onMouseLeave={() => setHoveredPoint(null)}
               />
-            );
-          })}
-          
-          {/* Gradient definition */}
-          <defs>
-            <linearGradient id={`gradient-${color.replace('#', '')}`} x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor={color} stopOpacity="0.6" />
-              <stop offset="100%" stopColor={color} stopOpacity="0.0" />
-            </linearGradient>
-          </defs>
+              {/* Glow effect */}
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r="1.5"
+                fill={color}
+                opacity="0.2"
+                className={hoveredPoint?.x === point.x ? "opacity-60" : "opacity-20"}
+                style={{ transition: 'opacity 0.2s' }}
+              />
+              {/* Main point */}
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r={hoveredPoint?.x === point.x ? "1.2" : "0.8"}
+                fill="white"
+                stroke={color}
+                strokeWidth="0.4"
+                style={{ 
+                  filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.1))',
+                  transition: 'r 0.2s'
+                }}
+              />
+            </g>
+          ))}
         </svg>
         
         {/* Y-axis labels */}
-        <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-muted-foreground py-4">
-          <span>{maxValue}</span>
-          <span>{Math.round(maxValue * 0.75)}</span>
-          <span>{Math.round(maxValue * 0.5)}</span>
-          <span>{Math.round(maxValue * 0.25)}</span>
-          <span>0</span>
+        <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-slate-500" style={{ paddingTop: `${(padding.top / 100) * height}px`, paddingBottom: `${(padding.bottom / 100) * height}px` }}>
+          <span className="bg-white/90 px-1 py-0.5 rounded text-xs font-medium">{effectiveMax}</span>
+          <span className="bg-white/90 px-1 py-0.5 rounded text-xs font-medium">{Math.round(effectiveMax * 0.75)}</span>
+          <span className="bg-white/90 px-1 py-0.5 rounded text-xs font-medium">{Math.round(effectiveMax * 0.5)}</span>
+          <span className="bg-white/90 px-1 py-0.5 rounded text-xs font-medium">{Math.round(effectiveMax * 0.25)}</span>
+          <span className="bg-white/90 px-1 py-0.5 rounded text-xs font-medium">{minValue}</span>
         </div>
         
-        {/* X-axis labels */}
-        <div className="absolute bottom-0 left-8 right-0 h-6 flex justify-between text-xs text-muted-foreground">
-          <span>{data[0]?.date}</span>
-          <span>{data[Math.floor(data.length / 2)]?.date}</span>
-          <span>{data[data.length - 1]?.date}</span>
+        {/* X-axis labels - properly aligned */}
+        <div className="absolute bottom-0 text-xs text-slate-500" style={{ 
+          left: `${(padding.left / 100) * 100}%`, 
+          right: `${(padding.right / 100) * 100}%`,
+          paddingBottom: '4px'
+        }}>
+          <div className="flex justify-between items-end">
+            <span className="bg-white/90 px-1 py-0.5 rounded text-xs font-medium">{data[0]?.date}</span>
+            {data.length > 2 && (
+              <span className="bg-white/90 px-1 py-0.5 rounded text-xs font-medium">{data[Math.floor(data.length / 2)]?.date}</span>
+            )}
+            <span className="bg-white/90 px-1 py-0.5 rounded text-xs font-medium">{data[data.length - 1]?.date}</span>
+          </div>
         </div>
+
+        {/* Hover tooltip */}
+        {hoveredPoint && (
+          <div 
+            className="absolute bg-slate-800 text-white px-3 py-2 rounded-lg shadow-lg text-sm pointer-events-none z-10"
+            style={{
+              left: `${hoveredPoint.x}%`,
+              top: `${hoveredPoint.y}%`,
+              transform: 'translate(-50%, -120%)'
+            }}
+          >
+            <div className="font-semibold">{hoveredPoint.value} scans</div>
+            <div className="text-slate-300 text-xs">{hoveredPoint.date}</div>
+          </div>
+        )}
       </div>
     );
   };
@@ -625,7 +718,7 @@ export function AnalyticsSection() {
                     
                     {filteredQRCodes.length === 0 && searchTerm && (
                       <div className="p-3 text-center text-sm text-muted-foreground">
-                        Ingen QR-koder funnet for "{searchTerm}"
+                        Ingen QR-koder funnet for &quot;{searchTerm}&quot;
                       </div>
                     )}
                   </div>
@@ -1284,18 +1377,133 @@ export function AnalyticsSection() {
               <div className="space-y-6">
                 {/* Charts Row */}
                 <div className="grid gap-6 md:grid-cols-2">
-                  <Card>
+                  {/* Enhanced Scans Over Time Chart */}
+                  <Card className="bg-gradient-to-br from-purple-50 to-blue-50 border-purple-200/50">
                     <CardHeader>
-                      <CardTitle style={{ fontFamily: 'Satoshi-Bold, Satoshi-Variable' }}>
-                        Scans over tid - {selectedQR.title}
-                      </CardTitle>
-                      <p className="text-sm text-muted-foreground" style={{ fontFamily: 'Satoshi-Regular, Satoshi-Variable' }}>
-                        Siste {timeRange === '7d' ? '7 dager' : timeRange === '30d' ? '30 dager' : timeRange === '90d' ? '90 dager' : '1 år'} for denne QR-koden
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="flex items-center gap-2" style={{ fontFamily: 'Satoshi-Bold, Satoshi-Variable' }}>
+                            <Activity className="w-5 h-5 text-purple-600" />
+                            Scans over tid - {selectedQR.title}
+                          </CardTitle>
+                          <p className="text-sm text-muted-foreground mt-1" style={{ fontFamily: 'Satoshi-Regular, Satoshi-Variable' }}>
+                            Siste {timeRange === '7d' ? '7 dager' : timeRange === '30d' ? '30 dager' : timeRange === '90d' ? '90 dager' : '1 år'} for denne QR-koden
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-purple-600" style={{ fontFamily: 'Satoshi-Bold, Satoshi-Variable' }}>
+                            {selectedQR.scan_count}
+                          </div>
+                          <div className="text-xs text-muted-foreground">totalt</div>
+                        </div>
+                      </div>
                     </CardHeader>
                     <CardContent>
-                      <div className="h-48">
-                        <SimpleLineChart data={selectedTimeSeriesData} color="#8b5cf6" height={160} />
+                      {/* Professional Chart Container */}
+                      <div className="relative h-48 bg-gradient-to-br from-slate-50 to-purple-50/30 rounded-xl p-4 shadow-inner border border-slate-200/50 overflow-hidden">
+                        <div className="absolute inset-0 bg-white/40 backdrop-blur-sm rounded-xl" />
+                        <div className="relative z-10 h-full w-full">
+                          <SimpleLineChart data={selectedTimeSeriesData} color="#8b5cf6" height={160} />
+                        </div>
+                      </div>
+                      
+                      {/* Smart Chart Insights - Non-repetitive */}
+                      <div className="mt-4 p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-100">
+                        <div className="grid grid-cols-3 gap-4 text-center">
+                          <div className="group hover:scale-105 transition-transform duration-200">
+                            <div className="text-lg font-bold text-purple-600 mb-1" style={{ fontFamily: 'Satoshi-Bold, Satoshi-Variable' }}>
+                              {(() => {
+                                const recentScans = selectedTimeSeriesData.slice(-7).reduce((sum, day) => sum + day.scans, 0);
+                                const previousScans = selectedTimeSeriesData.slice(-14, -7).reduce((sum, day) => sum + day.scans, 0);
+                                const change = previousScans > 0 ? Math.round(((recentScans - previousScans) / previousScans) * 100) : 0;
+                                return change >= 0 ? `+${change}%` : `${change}%`;
+                              })()}
+                            </div>
+                            <div className="text-xs text-slate-600 font-medium">
+                              Ukentlig trend
+                            </div>
+                          </div>
+                          <div className="group hover:scale-105 transition-transform duration-200">
+                            <div className="text-lg font-bold text-purple-600 mb-1" style={{ fontFamily: 'Satoshi-Bold, Satoshi-Variable' }}>
+                              {(() => {
+                                const activeDays = selectedTimeSeriesData.filter(d => d.scans > 0).length;
+                                const totalDays = selectedTimeSeriesData.length;
+                                return Math.round((activeDays / totalDays) * 100);
+                              })()}%
+                            </div>
+                            <div className="text-xs text-slate-600 font-medium">
+                              Aktivitetsgrad
+                            </div>
+                          </div>
+                          <div className="group hover:scale-105 transition-transform duration-200">
+                            <div className="text-lg font-bold text-purple-600 mb-1" style={{ fontFamily: 'Satoshi-Bold, Satoshi-Variable' }}>
+                              {(() => {
+                                const peakDay = Math.max(...selectedTimeSeriesData.map(d => d.scans));
+                                const averageDay = Math.round(selectedTimeSeriesData.reduce((sum, day) => sum + day.scans, 0) / selectedTimeSeriesData.length);
+                                return averageDay > 0 ? `${(peakDay / averageDay).toFixed(1)}x` : '0x';
+                              })()}
+                            </div>
+                            <div className="text-xs text-slate-600 font-medium">
+                              Toppfaktor
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Smart Performance Insights */}
+                      <div className="mt-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-slate-700">Ytelsesanalyse</span>
+                          <div className="flex items-center gap-2">
+                            {(() => {
+                              const recentScans = selectedTimeSeriesData.slice(-7).reduce((sum, day) => sum + day.scans, 0);
+                              const previousScans = selectedTimeSeriesData.slice(-14, -7).reduce((sum, day) => sum + day.scans, 0);
+                              const trendChange = previousScans > 0 ? ((recentScans - previousScans) / previousScans) * 100 : 0;
+                              const activeDays = selectedTimeSeriesData.filter(d => d.scans > 0).length;
+                              const totalDays = selectedTimeSeriesData.length;
+                              const consistency = (activeDays / totalDays) * 100;
+                              const peakDay = Math.max(...selectedTimeSeriesData.map(d => d.scans));
+                              const avgDay = selectedTimeSeriesData.reduce((sum, day) => sum + day.scans, 0) / selectedTimeSeriesData.length;
+                              
+                              const badges = [];
+                              
+                              // Trend badge
+                              if (trendChange > 20) {
+                                badges.push({ text: "🚀 Voksende", variant: "default" });
+                              } else if (trendChange > 0) {
+                                badges.push({ text: "📈 Økende", variant: "secondary" });
+                              } else if (trendChange < -20) {
+                                badges.push({ text: "📉 Fallende", variant: "destructive" });
+                              } else if (trendChange < 0) {
+                                badges.push({ text: "🔄 Avtagende", variant: "outline" });
+                              }
+                              
+                              // Engagement badge
+                              if (consistency > 80) {
+                                badges.push({ text: "⚡ Høy engasjement", variant: "default" });
+                              } else if (consistency > 60) {
+                                badges.push({ text: "📊 Stabilt", variant: "secondary" });
+                              } else if (consistency > 30) {
+                                badges.push({ text: "🔄 Variabelt", variant: "outline" });
+                              }
+                              
+                              // Special achievements
+                              if (peakDay > avgDay * 3) {
+                                badges.push({ text: "🎯 Viral moment", variant: "default" });
+                              }
+                              
+                              if (selectedQR.scan_count > 100) {
+                                badges.push({ text: "💯 Høy volum", variant: "secondary" });
+                              }
+                              
+                              return badges.slice(0, 3).map((badge, index) => (
+                                <Badge key={index} variant={badge.variant as "default" | "secondary" | "destructive" | "outline"} className="text-xs">
+                                  {badge.text}
+                                </Badge>
+                              ));
+                            })()}
+                          </div>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -1340,6 +1548,221 @@ export function AnalyticsSection() {
                     </CardContent>
                   </Card>
                 </div>
+
+                {/* Enhanced Time Analytics */}
+                <div className="grid gap-6 md:grid-cols-2">
+                  {/* Weekly Pattern Analysis */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2" style={{ fontFamily: 'Satoshi-Bold, Satoshi-Variable' }}>
+                        <Calendar className="w-5 h-5 text-blue-600" />
+                        Ukentlige mønstre
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground" style={{ fontFamily: 'Satoshi-Regular, Satoshi-Variable' }}>
+                        Aktivitet fordelt på ukedager
+                      </p>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {(() => {
+                          const qrSpecificScans = qrScans.filter(scan => scan.qr_code_id === selectedQR.id);
+                          
+                          if (qrSpecificScans.length === 0) {
+                            return (
+                              <div className="text-center py-4">
+                                <p className="text-sm text-muted-foreground">Ingen data ennå</p>
+                              </div>
+                            );
+                          }
+
+                          const weekDays = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
+                          const weeklyCount = [0, 0, 0, 0, 0, 0, 0];
+                          
+                          qrSpecificScans.forEach(scan => {
+                            const day = new Date(scan.scanned_at).getDay();
+                            const adjustedDay = day === 0 ? 6 : day - 1; // Adjust Sunday to be last
+                            weeklyCount[adjustedDay]++;
+                          });
+
+                          const maxCount = Math.max(...weeklyCount);
+                          
+                          return weekDays.map((day, index) => (
+                            <div key={day} className="flex items-center justify-between p-2 bg-muted/30 rounded-lg">
+                              <div className="flex items-center gap-3">
+                                <span className="text-sm font-medium w-16" style={{ fontFamily: 'Satoshi-Medium, Satoshi-Variable' }}>
+                                  {day.substring(0, 3)}
+                                </span>
+                                <div className="flex-1 bg-muted/50 rounded-full h-2 min-w-[60px]">
+                                  <div 
+                                    className="h-2 bg-blue-500 rounded-full transition-all duration-500"
+                                    style={{ width: `${maxCount > 0 ? (weeklyCount[index] / maxCount) * 100 : 0}%` }}
+                                  />
+                                </div>
+                              </div>
+                              <div className="text-sm font-semibold text-right min-w-[30px]">
+                                {weeklyCount[index]}
+                              </div>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Hourly Activity Heatmap */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2" style={{ fontFamily: 'Satoshi-Bold, Satoshi-Variable' }}>
+                        <Clock className="w-5 h-5 text-green-600" />
+                        Aktivitetstimer
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground" style={{ fontFamily: 'Satoshi-Regular, Satoshi-Variable' }}>
+                        Når skjer scanninger vanligvis
+                      </p>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-6 gap-2">
+                        {(() => {
+                          const qrSpecificScans = qrScans.filter(scan => scan.qr_code_id === selectedQR.id);
+                          
+                          if (qrSpecificScans.length === 0) {
+                            return (
+                              <div className="col-span-6 text-center py-4">
+                                <p className="text-sm text-muted-foreground">Ingen data ennå</p>
+                              </div>
+                            );
+                          }
+
+                          const hourlyCount = Array(24).fill(0);
+                          qrSpecificScans.forEach(scan => {
+                            const hour = new Date(scan.scanned_at).getHours();
+                            hourlyCount[hour]++;
+                          });
+
+                          const maxHourlyCount = Math.max(...hourlyCount);
+                          
+                          return hourlyCount.map((count, hour) => {
+                            const intensity = maxHourlyCount > 0 ? (count / maxHourlyCount) : 0;
+                            return (
+                              <div 
+                                key={hour} 
+                                className="aspect-square rounded-lg flex items-center justify-center text-xs font-medium relative group cursor-pointer"
+                                style={{
+                                  backgroundColor: `rgba(34, 197, 94, ${0.1 + intensity * 0.8})`,
+                                  color: intensity > 0.5 ? 'white' : 'rgb(34, 197, 94)'
+                                }}
+                              >
+                                {hour}
+                                {count > 0 && (
+                                  <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black text-white px-2 py-1 rounded text-xs opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                                    {hour}:00 - {count} scans
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                      <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
+                        <span>00:00</span>
+                        <span>06:00</span>
+                        <span>12:00</span>
+                        <span>18:00</span>
+                        <span>23:00</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Scan Velocity & Trends */}
+                <Card className="bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200/50">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2" style={{ fontFamily: 'Satoshi-Bold, Satoshi-Variable' }}>
+                      <TrendingUp className="w-5 h-5 text-emerald-600" />
+                      Scan-hastighet og trender
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground" style={{ fontFamily: 'Satoshi-Regular, Satoshi-Variable' }}>
+                      Analyser av vekst og momentum
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-6 md:grid-cols-4">
+                      {(() => {
+                        const createdDate = new Date(selectedQR.created_at);
+                        const now = new Date();
+                        const daysSinceCreation = Math.max(1, Math.ceil((now.getTime() - createdDate.getTime()) / (24 * 60 * 60 * 1000)));
+                        
+                        // Calculate velocity (scans per day)
+                        const velocity = selectedQR.scan_count / daysSinceCreation;
+                        
+                        // Calculate recent momentum (last 7 days vs previous 7 days)
+                        const recentScans = selectedTimeSeriesData.slice(-7).reduce((sum, day) => sum + day.scans, 0);
+                        const previousScans = selectedTimeSeriesData.slice(-14, -7).reduce((sum, day) => sum + day.scans, 0);
+                        const momentum = previousScans > 0 ? ((recentScans - previousScans) / previousScans) * 100 : 0;
+                        
+                        // Calculate consistency score
+                        const activeDays = selectedTimeSeriesData.filter(d => d.scans > 0).length;
+                        const consistency = (activeDays / selectedTimeSeriesData.length) * 100;
+                        
+                        // Calculate peak performance
+                        const peakDay = Math.max(...selectedTimeSeriesData.map(d => d.scans));
+                        const peakPerformance = velocity > 0 ? (peakDay / velocity) : 0;
+                        
+                        return (
+                          <>
+                            <div className="bg-white rounded-lg p-4 text-center">
+                              <div className="text-2xl font-bold text-emerald-600 mb-1" style={{ fontFamily: 'Satoshi-Bold, Satoshi-Variable' }}>
+                                {velocity.toFixed(1)}
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                Scans/dag
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-1">
+                                Gjennomsnittlig hastighet
+                              </div>
+                            </div>
+                            
+                            <div className="bg-white rounded-lg p-4 text-center">
+                              <div className={`text-2xl font-bold mb-1 ${momentum >= 0 ? 'text-green-600' : 'text-red-600'}`} style={{ fontFamily: 'Satoshi-Bold, Satoshi-Variable' }}>
+                                {momentum >= 0 ? '+' : ''}{momentum.toFixed(0)}%
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                Momentum
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-1">
+                                Siste uke vs forrige
+                              </div>
+                            </div>
+                            
+                            <div className="bg-white rounded-lg p-4 text-center">
+                              <div className="text-2xl font-bold text-emerald-600 mb-1" style={{ fontFamily: 'Satoshi-Bold, Satoshi-Variable' }}>
+                                {consistency.toFixed(0)}%
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                Konsistens
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-1">
+                                Dager med aktivitet
+                              </div>
+                            </div>
+                            
+                            <div className="bg-white rounded-lg p-4 text-center">
+                              <div className="text-2xl font-bold text-emerald-600 mb-1" style={{ fontFamily: 'Satoshi-Bold, Satoshi-Variable' }}>
+                                {peakPerformance.toFixed(1)}x
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                Beste dag
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-1">
+                                vs gjennomsnitt
+                              </div>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </CardContent>
+                </Card>
 
                 {/* Advanced Analytics Grid */}
                 <div className="grid gap-6 md:grid-cols-3">
@@ -1652,7 +2075,12 @@ export function AnalyticsSection() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       {(() => {
-                        const advancedSettings = selectedQR.advanced_settings || {};
+                        const advancedSettings = selectedQR.advanced_settings as { 
+                          passwordProtected?: boolean; 
+                          scanLimit?: number; 
+                          geoLocked?: boolean; 
+                          timeRestricted?: boolean; 
+                        } || {};
                         const hasAdvancedFeatures = Object.keys(advancedSettings).length > 0;
 
                         if (!hasAdvancedFeatures) {
@@ -1911,7 +2339,7 @@ export function AnalyticsSection() {
                                ipCounts[scan.ip_address] = (ipCounts[scan.ip_address] || 0) + 1;
                              }
                            });
-                           const suspiciousIPs = Object.entries(ipCounts).filter(([ip, count]) => count > 10).length;
+                           const suspiciousIPs = Object.entries(ipCounts).filter(([, count]) => count > 10).length;
                            if (suspiciousIPs > 0) {
                              securityInsights.push({
                                type: 'warning',

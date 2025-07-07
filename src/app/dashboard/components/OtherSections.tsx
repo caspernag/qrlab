@@ -13,7 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 
 export function BulkUploadSection() {
@@ -90,7 +90,7 @@ export function TeamSection() {
 }
 
 export function SettingsSection() {
-  const { user, updateProfile } = useAuth();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState({
     full_name: '',
@@ -116,19 +116,7 @@ export function SettingsSection() {
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-  // Load user profile on component mount
-  useEffect(() => {
-    if (user) {
-      setProfile({
-        full_name: user.user_metadata?.full_name || '',
-        email: user.email || '',
-        avatar_url: user.user_metadata?.avatar_url || ''
-      });
-      loadNotificationSettings();
-    }
-  }, [user]);
-
-  const loadNotificationSettings = async () => {
+  const loadNotificationSettings = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -142,7 +130,19 @@ export function SettingsSection() {
     } catch (error) {
       console.error('Error loading notification settings:', error);
     }
-  };
+  }, [user?.id]);
+
+  // Load user profile on component mount
+  useEffect(() => {
+    if (user) {
+      setProfile({
+        full_name: user.user_metadata?.full_name || '',
+        email: user.email || '',
+        avatar_url: user.user_metadata?.avatar_url || ''
+      });
+      loadNotificationSettings();
+    }
+  }, [user, loadNotificationSettings]);
 
   const handleProfileUpdate = async () => {
     if (!user) return;
@@ -172,8 +172,9 @@ export function SettingsSection() {
       if (profileError) throw profileError;
 
       toast.success('Profil oppdatert!');
-    } catch (error: any) {
-      toast.error(`Feil ved oppdatering: ${error.message}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Ukjent feil';
+      toast.error(`Feil ved oppdatering: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -200,8 +201,9 @@ export function SettingsSection() {
 
       setPasswords({ current: '', new: '', confirm: '' });
       toast.success('Passord endret!');
-    } catch (error: any) {
-      toast.error(`Feil ved endring av passord: ${error.message}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Ukjent feil';
+      toast.error(`Feil ved endring av passord: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -222,8 +224,9 @@ export function SettingsSection() {
 
       if (error) throw error;
       toast.success('Varslingsinnstillinger oppdatert!');
-    } catch (error: any) {
-      toast.error(`Feil ved oppdatering: ${error.message}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Ukjent feil';
+      toast.error(`Feil ved oppdatering: ${errorMessage}`);
     }
   };
 
@@ -255,8 +258,9 @@ export function SettingsSection() {
       await supabase.auth.signOut();
       
       toast.success('Konto data slettet og du er logget ut');
-    } catch (error: any) {
-      toast.error(`Feil ved sletting: ${error.message}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Ukjent feil';
+      toast.error(`Feil ved sletting: ${errorMessage}`);
     } finally {
       setLoading(false);
       setIsDeleteDialogOpen(false);
@@ -277,7 +281,7 @@ export function SettingsSection() {
       const fileExt = file.name.split('.').pop();
       const fileName = `${user?.id}-${Math.random()}.${fileExt}`;
       
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from('avatars')
         .upload(fileName, file);
 
@@ -289,8 +293,9 @@ export function SettingsSection() {
 
       setProfile(prev => ({ ...prev, avatar_url: publicUrl }));
       toast.success('Profilbilde lastet opp!');
-    } catch (error: any) {
-      toast.error(`Feil ved opplasting: ${error.message}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Ukjent feil';
+      toast.error(`Feil ved opplasting: ${errorMessage}`);
     } finally {
       setLoading(false);
     }

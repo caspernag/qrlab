@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { Button } from '@/components/ui/button';
 import { useEffect, useState } from 'react';
-import { CurrentUserAvatar } from "./current-user-avatar";
 import { User } from '@supabase/supabase-js';
 
 export default function Navbar() {

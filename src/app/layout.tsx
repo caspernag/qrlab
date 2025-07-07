@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import "../../public/Fonts/WEB/css/satoshi.css";
 import "./globals.css";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "QRLab - Lag QR-koder enkelt",
@@ -16,7 +14,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="no">
-      <body className={inter.className} suppressHydrationWarning={true}>
+      <body className="font-sans" style={{ fontFamily: 'Satoshi-Variable, Satoshi-Regular, ui-sans-serif, system-ui, sans-serif' }} suppressHydrationWarning={true}>
         {children}
       </body>
     </html>

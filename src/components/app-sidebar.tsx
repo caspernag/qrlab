@@ -7,8 +7,7 @@ import {
   Upload, 
   BarChart3, 
   Users, 
-  Settings,
-  Plus
+  Settings
 } from "lucide-react"
 
 import { SearchForm } from "@/components/search-form"
@@ -23,9 +22,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-  SidebarFooter,
 } from "@/components/ui/sidebar"
-import { Button } from "@/components/ui/button"
 import { useDashboard, type DashboardSection } from "@/hooks/useDashboard"
 
 // QR Dashboard navigation data
@@ -64,7 +61,7 @@ const data = {
   ],
 }
 
-export function AppSidebar({ onCreateQR, ...props }: React.ComponentProps<typeof Sidebar> & { onCreateQR?: () => void }) {
+export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   const { activeSection, setActiveSection } = useDashboard()
 
   return (

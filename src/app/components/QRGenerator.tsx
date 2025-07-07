@@ -172,8 +172,12 @@ export default function QRGenerator() {
   // Initialize generator only once when component mounts
   useEffect(() => {
     setIsMounted(true);
-    setGenerator(new QRCodeGenerator(qrStyle));
-  }, []); // Remove dependencies to prevent re-initialization
+    if (!generator) {
+      setGenerator(new QRCodeGenerator(qrStyle));
+    } else {
+      generator.updateOptions(qrStyle);
+    }
+  }, [qrStyle, generator]);
 
   // Memoized QR generation function
   const generateQR = useCallback(async () => {

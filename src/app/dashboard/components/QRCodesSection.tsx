@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { useQRCodes } from '@/hooks/useQRCodes';
-import { Plus, QrCode, Search, Filter, MoreHorizontal, Eye, Edit, Trash, X } from 'lucide-react';
+import { Plus, QrCode, Search, Filter, MoreHorizontal, Eye, Edit, Trash } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,9 +49,14 @@ export function QRCodesSection() {
 
   // Helper function to generate QR code URL for viewing with tracking
   const generateQRCodeURL = (qr: QRCode) => {
-    const size = qr.design_settings?.size || 200;
-    const fg = (qr.design_settings?.foregroundColor || '#000000').replace('#', '');
-    const bg = (qr.design_settings?.backgroundColor || '#ffffff').replace('#', '');
+    const designSettings = qr.design_settings as { 
+      size?: number; 
+      foregroundColor?: string; 
+      backgroundColor?: string; 
+    } || {};
+    const size = designSettings.size || 200;
+    const fg = (designSettings.foregroundColor || '#000000').replace('#', '');
+    const bg = (designSettings.backgroundColor || '#ffffff').replace('#', '');
     
     // Use tracking URL if analytics is enabled, otherwise use original content
     const contentToEncode = getTrackableContent({
@@ -376,7 +382,7 @@ export function QRCodesSection() {
       <CreateQRDialog 
         open={createDialogOpen} 
         onOpenChange={handleCreateDialogClose}
-        editingQR={editingQR}
+        editingQR={editingQR || undefined}
       />
 
       {/* View QR Dialog */}
@@ -394,7 +400,7 @@ export function QRCodesSection() {
             <div className="space-y-4">
               <div className="flex items-center justify-center p-6 bg-muted rounded-lg">
                 <div className="w-48 h-48 bg-white rounded-lg flex items-center justify-center">
-                  <img 
+                  <Image 
                     src={generateQRCodeURL(selectedQR)} 
                     alt="QR Code"
                     width={200}
@@ -463,7 +469,7 @@ export function QRCodesSection() {
               Slett QR-kode
             </DialogTitle>
             <DialogDescription style={{ fontFamily: 'Satoshi-Regular, Satoshi-Variable' }}>
-              Er du sikker på at du vil slette QR-koden "{selectedQR?.title}"? 
+              Er du sikker på at du vil slette QR-koden &quot;{selectedQR?.title}&quot;? 
               Denne handlingen kan ikke angres.
             </DialogDescription>
           </DialogHeader>

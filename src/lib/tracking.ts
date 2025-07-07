@@ -1,11 +1,7 @@
 // QR Code Tracking Utilities
 
-// For testing: use local API endpoint
-const TRACKING_BASE_URL = 'http://192.168.10.195:5678/webhook-test/qrlab';
-
-// For production: use external webhook
-// const TRACKING_BASE_URL = 'http://caspernag.app.n8n.cloud/webhook-test/qrlab';
-
+// For testing: use external webhook
+const TRACKING_BASE_URL = 'https://feasible-troll-epic.ngrok-free.app/webhook/qrlab';
 /**
  * Generate a unique scan ID for tracking
  */
@@ -40,7 +36,7 @@ export function getTrackableContent(qrCode: {
   id: string;
   type: string;
   content: string;
-  design_settings?: any;
+  design_settings?: Record<string, unknown>;
 }): string {
   // Check if tracking is enabled (default to true)
   const trackingEnabled = qrCode.design_settings?.trackAnalytics !== false;
@@ -96,27 +92,48 @@ export async function logQRScan(scanData: {
   try {
     const { supabase } = await import('./supabase');
     
-    const { error } = await supabase
+    console.log('Attempting to log QR scan:', {
+      qrCodeId: scanData.qrCodeId,
+      scanId: scanData.scanId,
+      ipAddress: scanData.ipAddress
+    });
+    
+    const insertData = {
+      qr_code_id: scanData.qrCodeId,
+      scan_id: scanData.scanId,
+      ip_address: scanData.ipAddress || 'unknown',
+      user_agent: scanData.userAgent || 'unknown',
+      country: scanData.country || 'unknown',
+      city: scanData.city || 'unknown',
+      latitude: scanData.latitude,
+      longitude: scanData.longitude,
+      scanned_at: new Date().toISOString()
+    };
+    
+    console.log('Insert data:', insertData);
+    
+    const { data, error } = await supabase
       .from('qr_scans')
-      .insert({
-        qr_code_id: scanData.qrCodeId,
-        scan_id: scanData.scanId,
-        ip_address: scanData.ipAddress || 'unknown',
-        user_agent: scanData.userAgent || 'unknown',
-        country: scanData.country || 'unknown',
-        city: scanData.city || 'unknown',
-        latitude: scanData.latitude,
-        longitude: scanData.longitude,
-        scanned_at: new Date().toISOString()
-      });
+      .insert(insertData)
+      .select();
     
     if (error) {
-      console.error('Error logging QR scan:', error);
+      console.error('Supabase error details:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      });
       return false;
     }
     
+    console.log('Successfully inserted scan:', data);
+    
     // Also increment scan count on the QR code
-    await supabase.rpc('increment_scan_count', { qr_code_id: scanData.qrCodeId });
+    const { error: rpcError } = await supabase.rpc('increment_scan_count', { qr_code_id: scanData.qrCodeId });
+    if (rpcError) {
+      console.error('Error incrementing scan count:', rpcError);
+    }
     
     return true;
   } catch (error) {

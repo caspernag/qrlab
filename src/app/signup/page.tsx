@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import '../../../public/Fonts/WEB/css/satoshi.css';
 import AuthWrapper from '@/components/AuthWrapper';
@@ -18,7 +17,7 @@ export default function SignUp() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const router = useRouter();
+
 
   return (
     <AuthWrapper>
@@ -131,13 +130,14 @@ export default function SignUp() {
                 }
                 
                 setSuccess('Bekreftelseslenke sendt til din e-post!');
-              } catch (error: any) {
+              } catch (error: unknown) {
                 console.error('Signup error:', error);
-                setError(error.message === 'User already registered' ? 
+                const errorMessage = error instanceof Error ? error.message : 'Ukjent feil';
+                setError(errorMessage === 'User already registered' ? 
                   'E-posten er allerede registrert' : 
-                  error.message.includes('Database error') ? 
+                  errorMessage.includes('Database error') ? 
                   'Det oppstod en databasefeil. Prøv igjen.' : 
-                  error.message);
+                  errorMessage);
               } finally {
                 setLoading(false);
               }

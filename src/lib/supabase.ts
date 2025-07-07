@@ -13,8 +13,8 @@ export interface QRCode {
   type: 'url' | 'text' | 'vcard' | 'wifi' | 'email' | 'phone' | 'sms' | 'event' | 'crypto'
   content: string
   short_url: string
-  design_settings: Record<string, any>
-  advanced_settings?: Record<string, any>
+  design_settings: Record<string, unknown>
+  advanced_settings?: Record<string, unknown>
   scan_count: number
   is_active: boolean
   created_at: string
@@ -40,7 +40,7 @@ export interface QRAccessRestriction {
   id: string
   qr_code_id: string
   restriction_type: 'geo' | 'time' | 'password' | 'scan_limit'
-  restriction_data: Record<string, any>
+  restriction_data: Record<string, unknown>
   created_at: string
 }
 
@@ -48,7 +48,7 @@ export interface QRSecurityEvent {
   id: string
   qr_code_id: string
   event_type: 'blocked_scan' | 'failed_password' | 'geo_violation' | 'time_violation' | 'scan_limit_exceeded' | 'qr_created'
-  event_data?: Record<string, any>
+  event_data?: Record<string, unknown>
   ip_address?: string
   user_agent?: string
   created_at: string

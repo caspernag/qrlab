@@ -19,7 +19,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { Skeleton } from "@/components/ui/skeleton";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -36,7 +36,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -140,12 +139,12 @@ function DashboardContent() {
     if (!authLoading && !user) {
       router.push('/login');
     }
-  }, [user, authLoading]); // FIXED: Removed router from dependencies to prevent infinite loops
+  }, [user, authLoading, router]);
 
   if (authLoading || !user) {
     return (
       <SidebarProvider>
-        <AppSidebar onCreateQR={() => setCreateQRDialogOpen(true)} />
+        <AppSidebar />
         <SidebarInset>
           <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
             <div className="flex items-center gap-2 px-4">
@@ -263,7 +262,7 @@ function DashboardContent() {
 
   return (
     <SidebarProvider>
-      <AppSidebar onCreateQR={() => setCreateQRDialogOpen(true)} />
+      <AppSidebar />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
           <div className="flex items-center gap-2 px-4">

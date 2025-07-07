@@ -79,9 +79,10 @@ export default function Login() {
                 });
                 if (error) throw error;
                 router.push('/dashboard');
-              } catch (error: any) {
-                setError(error.message === 'Invalid login credentials' ? 
-                  'Ugyldig e-post eller passord' : error.message);
+              } catch (error: unknown) {
+                const errorMessage = error instanceof Error ? error.message : 'Ukjent feil';
+                setError(errorMessage === 'Invalid login credentials' ? 
+                  'Ugyldig e-post eller passord' : errorMessage);
               } finally {
                 setLoading(false);
               }
