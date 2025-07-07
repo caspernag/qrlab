@@ -29,7 +29,7 @@ export default function Home() {
               className="text-6xl md:text-8xl font-bold mb-6 text-slate-900 leading-tight tracking-tight" 
               style={{ fontFamily: 'Satoshi-Black' }}
             >
-              Intelligent Markedsføring
+              Intelligent Markedsføring.
             </h1>
             <p 
               className="text-xl md:text-2xl text-slate-600 mb-12 max-w-2xl mx-auto leading-relaxed" 
