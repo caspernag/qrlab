@@ -70,7 +70,7 @@ export default function Navbar() {
             Funksjoner
           </Link>
           <Link 
-            href="#pricing" 
+            href="/pricing" 
             className="text-slate-600 hover:text-slate-900 transition-colors px-3 py-2 rounded-md hover:bg-slate-50" 
             style={{ fontFamily: 'Satoshi-Medium' }}
           >
